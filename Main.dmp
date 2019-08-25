@@ -1,0 +1,370 @@
+00001  0000                       * = $0801                                ; BASIC START ADDRESS (#2049
+00002  0801  0D 08 DC             BYTE $0D,$08,$DC,$07,$9E,$20,$32         ; BASIC LOADER TO START AT $C000...
+00003  0808  31 37 36             BYTE $31,$37,$36,$00,$00,$00,$00         ; PUTS BASIC LINE 2012 SYS 49152
+00004  080F                       * = $0880                                ; START ADDRESS FOR 6502 CODE
+00005  0880             
+00006  0880             ADDRESS_MUSIC= $1000                            ; LOADING ADDRESS FOR SID TUNE
+00007  0880             SID_INIT  = $1000                                ; INIT ROUTINE FOR MUSIC
+00008  0880             SID_PLAY  = $1003                                ; PLAY MUSIC ROUTINE
+00009  0880             PAYLOAD   = $2700                                ; PAYLOAD
+00010  0880             FRAMETRIGGER= 50
+00011  0880             SCREENCOLS= 40
+00012  0880             SCREENLINES= 24
+00013  0880             STATUSLINE= SCREENLINES / 2 + 4
+00014  0880             INTCLOCK  = $02                    ; INTRUPT CLOCK / FRAME NUMBER
+00015  0880             PTRH      = $FC                    ; CURSOR HIGH BYTE ZERO PAGE ADDRESS
+00016  0880             PTRL      = $FB                    ; CURSOR LOW BYTE ZERO PAGE ADDRESS
+00017  0880             KERNAL_CHROUT= $FFD2              ; CHROUT KERNAL ROUTINE
+00018  0880             CLKPOS    = $07B9                  ;
+00019  0880             TEXTCOL   = $286                   ; TEXT COLOR
+00020  0880             BACKCOL   = $D021                  ; BACKGROUND COLOR
+00021  0880             BORDCOL   = $D020                  ; BORDER COLOR
+00022  0880             CHRSET    = $D018                  ; CURRENT CHAR SET
+00023  0880             
+00024  0880  A9 32                LDA  #FRAMETRIGGER       ; NUMBER OF FRAMES UNTIL COUNTER IS RESET
+00025  0882  85 02                STA  INTCLOCK            ; INTTRUPT GENERATED CLOCK
+00026  0884  A9 00                LDA  #0
+00027  0886  8D 55 0A             STA  LOADMUSIC
+00028  0889  A9 00                LDA  #$00                ; INITALISE POINTER
+00029  088B  85 FB                STA  PTRL                ;
+00030  088D  85 FC                STA  PTRH                ;
+00031  088F  8D 21 D0             STA  BACKCOL             ; INITALISE BACKGROUND AND TEXT COLOR THE SAME                       ;
+00032  0892  8D 86 02             STA  TEXTCOL             ; FOR A 'QUICK BLANK'
+00033  0895  8D 54 0A             STA  BDRCOL              ; DYNAMIC BORDER COLOUR UPDATED EVERY FRAME
+00034  0898  A9 17                LDA  #$17                ; SWITCH TO ALTERNITVE CHR SET
+00035  089A  8D 18 D0             STA  CHRSET              ;
+00036  089D  A9 93                LDA  #$93                ; CLEAR SCREEN
+00037  089F  20 D2 FF             JSR  KERNAL_CHROUT       ;
+00038  08A2  78                   SEI
+00039  08A3  A0 7F                LDY  #$7F                ; $7F = %01111111
+00040  08A5  8C 0D DC             STY  $DC0D               ; TURN OFF CIAS TIMER INTERRUPTS
+00041  08A8  8C 0D DD             STY  $DD0D               ; TURN OFF CIAS TIMER INTERRUPTS
+00042  08AB  AD 0D DC             LDA  $DC0D               ; CANCEL ALL CIA-IRQS IN QUEUE/UNPROCESSED
+00043  08AE  AD 0D DD             LDA  $DD0D               ; CANCEL ALL CIA-IRQS IN QUEUE/UNPROCESSED
+00044  08B1  A9 01                LDA  #$01                ; SET INTERRUPT REQUEST MASK...
+00045  08B3  8D 1A D0             STA  $D01A               ; ...WE WANT IRQ BY RASTERBEAM
+00046  08B6  A9 46                LDA  #<IRQ               ; POINT IRQ VECTOR TO OUR CUSTOM IRQ ROUTINE
+00047  08B8  A2 09                LDX  #>IRQ
+00048  08BA  8D 14 03             STA  $314                ; STORE IN $314/$315
+00049  08BD  8E 15 03             STX  $315
+00050  08C0  A9 10                LDA  #$10                ; TRIGGER FIRST INTERRUPT AT ROW ZERO
+00051  08C2  8D 12 D0             STA  $D012
+00052  08C5  AD 11 D0             LDA  $D011               ; BIT#0 OF $D011 IS BASICALLY...
+00053  08C8  29 7F                AND  #$7F                ; ...THE 9TH BIT FOR $D012
+00054  08CA  8D 11 D0             STA  $D011               ; WE NEED TO MAKE SURE IT IS SET TO ZERO
+00055  08CD  58                   CLI                      ; CLEAR INTERRUPT DISABLE FLAG
+00056  08CE  A9 9B                LDA  #$9B
+00057  08D0  8D 71 0A             STA  COPYTEXT
+00058  08D3  A9 0A                LDA  #>COPYTEXT
+00059  08D5  85 FC                STA  PTRH
+00060  08D7  A9 71                LDA  #<COPYTEXT
+00061  08D9  85 FB                STA  PTRL
+00062  08DB  A9 25                LDA  #COPYLAST-COPYTEXT      ;LENGTH OF STRING
+00063  08DD  8D 52 0A             STA  TXTLENGTH
+00064  08E0  20 A8 09             JSR  CONSOLEOUT
+00065  08E3  A9 04                LDA  #FNAMELAST-FNAME
+00066  08E5  8D 52 0A             STA  TXTLENGTH
+00067  08E8  A2 9A                LDX  #<FNAME
+00068  08EA  A0 0A                LDY  #>FNAME
+00069  08EC  20 E3 09             JSR  LOADCODE
+00070  08EF  A9 04                LDA  #CNAMELAST-CNAME
+00071  08F1  8D 52 0A             STA  TXTLENGTH
+00072  08F4  A2 96                LDX  #<CNAME
+00073  08F6  A0 0A                LDY  #>CNAME
+00074  08F8  20 E3 09             JSR  LOADCODE
+00075  08FB                       
+00076  08FB  A9 03                LDA  #SIDLAST-SID
+00077  08FD  8D 52 0A             STA  TXTLENGTH
+00078  0900  A2 9E                LDX  #<SID
+00079  0902  A0 0A                LDY  #>SID
+00080  0904             
+00081  0904  AD 55 0A             LDA  LOADMUSIC
+00082  0907  D0 0B                BNE  .NOLOAD
+00083  0909  20 E3 09             JSR  LOADCODE
+00084  090C  20 00 10             JSR  SID_INIT
+00085  090F  A9 01                LDA  #$01
+00086  0911  8D 50 0A             STA  MUSICREADY
+00087  0914             .NOLOAD
+00088  0914  A9 9B                LDA  #$9B
+00089  0916  8D A1 0A             STA  STATUS
+00090  0919  A9 A1                LDA  #<STATUS
+00091  091B  85 FB                STA  PTRL
+00092  091D  A9 0A                LDA  #>STATUS
+00093  091F  85 FC                STA  PTRH
+00094  0921  A9 00                LDA  #0
+00095  0923  8D 53 0A             STA  OLDCOUNT
+00096  0926             MAIN_LOOP
+00097  0926                       ; ------------------------------------------------FULL SPEED LOOP
+00098  0926  EE 54 0A             INC  BDRCOL
+00099  0929  AD 54 0A             LDA  BDRCOL              ; SET BORDER COLOUR
+00100  092C  8D 20 D0             STA  BORDCOL             ;
+00101  092F                       ;
+00102  092F  AD 1B 0B             LDA  COUNT               ;
+00103  0932  CD 53 0A             CMP  OLDCOUNT            ;
+00104  0935  F0 EF                BEQ  MAIN_LOOP           ; WAIT UNTLL THE COUNTER CHANGES        -----------FULL SPEED LOOP END
+00105  0937  8D 53 0A             STA  OLDCOUNT            ; UPDATE OLDCOUNT WITH NEW COUNT
+00106  093A                       ;--------------------------------------------------COUNT SPEED LOOP
+00107  093A  20 2A 0A             JSR  COUNTANIM
+00108  093D  20 8F 09             JSR  STATUSOUT
+00109  0940  4C 26 09             JMP  MAIN_LOOP           ;---------------------------------------------------COUNT SPEED LOOP END
+00110  0943  4C 43 09             JMP  *
+00111  0946             ;--------------------------------------------------------------------------------------------------------------------------------IRQ
+00112  0946             IRQ
+00113  0946  CE 19 D0             DEC  $D019               ; ACKNOWLEDGE IRQ / CLEAR REGISTER FOR NEXT INTERRUPT
+00114  0949  48                   PHA                      ; PUSH THE REGISTERS ON THE STACK
+00115  094A  8A                   TXA                      ;
+00116  094B  48                   PHA                      ;
+00117  094C  98                   TYA                      ;
+00118  094D  48                   PHA                      ;
+00119  094E  A5 FC                LDA  PTRH                ; PUSH THE POINTER ON THE STACK
+00120  0950  48                   PHA                      ;
+00121  0951  A5 FB                LDA  PTRL                ;
+00122  0953  48                   PHA                      ;
+00123  0954  C6 02                DEC  INTCLOCK            ; COUNT DOWN INT CLOCK
+00124  0956  D0 1F                BNE  @SKIP               ; SKIP AHEAD UNTIL ZERO
+00125  0958  A9 32                LDA  #FRAMETRIGGER       ; THEN RESET INT CLOCK
+00126  095A  85 02                STA  INTCLOCK            ; TO FRAMETRIGGER DEFAULT
+00127  095C                       ;
+00128  095C  F8                   SED                      ; DECIMAL MODE
+00129  095D  18                   CLC                      ; ADD ONE TO COUNT AND CARRY
+00130  095E  AD 1B 0B             LDA  COUNT               ; THANKS TO ROBIN @BEDFORDLVLEXP
+00131  0961  69 01                ADC  #1                  ; HTTPS://WWW.YOUTUBE.COM/CHANNEL/UC3GRBSWFKUTESHDWMZAQAFQ
+00132  0963  8D 1B 0B             STA  COUNT               ; FOR THIS ONE
+00133  0966  AD 1C 0B             LDA  COUNT + 1;
+00134  0969  69 00                ADC  #0                  ;
+00135  096B  8D 1C 0B             STA  COUNT + 1;
+00136  096E  AD 1D 0B             LDA  COUNT + 2;
+00137  0971  69 00                ADC  #0                  ;
+00138  0973  8D 1D 0B             STA  COUNT + 2;
+00139  0976  D8                   CLD                      ; END DECIMAL MODE
+00140  0977             @SKIP     ;
+00141  0977  AD 50 0A             LDA  MUSICREADY          ; IF MUSIC READY IS NOT READY
+00142  097A  C9 01                CMP  #1                  ; THEN SKIP CALLING THE PLAY SUBROUTINE
+00143  097C  D0 03                BNE  @SKIPPLAY           ;
+00144  097E  20 03 10             JSR  SID_PLAY            ;
+00145  0981             @SKIPPLAY
+00146  0981  68                   PLA                      ; PULL THE POINTER OFF THE STACK
+00147  0982  85 FB                STA  PTRL                ;
+00148  0984  68                   PLA                      ;
+00149  0985  85 FC                STA  PTRH                ;
+00150  0987  68                   PLA                      ; PULL THE REGESTERS OFF THE STAACK
+00151  0988  A8                   TAY                      ;
+00152  0989  68                   PLA                      ;
+00153  098A  AA                   TAX                      ;
+00154  098B  68                   PLA                      ;
+00155  098C  4C 31 EA             JMP  $EA31               ; RETURN TO KERNEL INTERRUPT ROUTINE
+00156  098F             ;--------------------------------------------------------------------------------------------------------------------------------IRQ
+00157  098F             ;--------------------------------------------------------------------------------------------------------------------------------SUBROUTINES
+00158  098F             STATUSOUT
+00159  098F  A9 13                LDA  #$13                ; CURSOR HOME
+00160  0991  20 D2 FF             JSR  KERNAL_CHROUT
+00161  0994  A0 00                LDY  #0
+00162  0996             @START
+00163  0996  A9 11                LDA  #$11                ; CURSOR DOWN
+00164  0998  20 D2 FF             JSR  KERNAL_CHROUT
+00165  099B  C8                   INY
+00166  099C  C0 10                CPY  #STATUSLINE
+00167  099E  D0 F6                BNE  @START
+00168  09A0  A9 1D                LDA  #$1D                ; CURSOR RIGHT
+00169  09A2  20 D2 FF             JSR  KERNAL_CHROUT
+00170  09A5  4C D5 09             JMP  TEXTOUT
+00171  09A8             CONSOLEOUT; OUTPUT CURSOR DOWN UNTIL LAST LINE
+00172  09A8  A9 13                LDA  #$13
+00173  09AA  20 D2 FF             JSR  KERNAL_CHROUT
+00174  09AD  A0 00                LDY  #0
+00175  09AF             @START
+00176  09AF  A9 11                LDA  #$11
+00177  09B1  20 D2 FF             JSR  KERNAL_CHROUT
+00178  09B4  C8                   INY
+00179  09B5  C0 18                CPY  #SCREENLINES
+00180  09B7  D0 F6                BNE  @START
+00181  09B9             PADCENTER
+00182  09B9  AD 52 0A             LDA  TXTLENGTH
+00183  09BC  18                   CLC
+00184  09BD  6A                   ROR  A
+00185  09BE  8D 51 0A             STA  PADS
+00186  09C1  A9 14                LDA  # SCREENCOLS / 2
+00187  09C3  38                   SEC
+00188  09C4  ED 51 0A             SBC  PADS
+00189  09C7  90 0C                BCC  @CONT
+00190  09C9  8D 51 0A             STA  PADS
+00191  09CC  A8                   TAY
+00192  09CD  A9 1D                LDA  #$1D
+00193  09CF             @LP
+00194  09CF  20 D2 FF             JSR  KERNAL_CHROUT
+00195  09D2  88                   DEY
+00196  09D3  D0 FA                BNE  @LP
+00197  09D5             @CONT
+00198  09D5             TEXTOUT
+00199  09D5  A0 00                LDY  #$00                ;
+00200  09D7             @LOOP
+00201  09D7  B1 FB                LDA  (PTRL),Y            ; READ CHRS FROM POINTER
+00202  09D9  20 D2 FF             JSR  KERNAL_CHROUT       ; OUTPUT USING ROM
+00203  09DC  C8                   INY                      ;
+00204  09DD  CC 52 0A             CPY  TXTLENGTH           ; HAS INDEX (Y) REACHED THE LENGTH OF TEXT
+00205  09E0  D0 F5                BNE  @LOOP               ; IF NOT LOOP
+00206  09E2  60                   RTS
+00207  09E3             LOADCODE
+00208  09E3  AD 52 0A             LDA  TXTLENGTH
+00209  09E6  20 BD FF             JSR  $FFBD               ; CALL SETNAM
+00210  09E9  A9 01                LDA  #$01
+00211  09EB  A6 BA                LDX  $BA                 ; LAST USED DEVICE NUMBER
+00212  09ED  D0 02                BNE  @SKIP
+00213  09EF  A2 08                LDX  #$08                ; DEFAULT TO DEVICE 8
+00214  09F1             @SKIP     ; NOT $01 MEANS: LOAD TO ADDRESS STORED IN FILE
+00215  09F1  20 BA FF             JSR  $FFBA               ; CALL SETLFS
+00216  09F4  A9 00                LDA  #$00                ; $00 MEANS: LOAD TO MEMORY (NOT VERIFY)
+00217  09F6  20 D5 FF             JSR  $FFD5               ; CALL LOAD
+00218  09F9  B0 01                BCS  ERROR               ; IF CARRY SET, A LOAD ERROR HAS HAPPENED
+00219  09FB  60                   RTS
+00220  09FC             ERROR
+00221  09FC  78                   SEI
+00222  09FD  A0 7F                LDY  #$7F                ; $7F = %01111111
+00223  09FF  8C 0D DC             STY  $DC0D               ; TURN OFF CIAS TIMER INTERRUPTS
+00224  0A02  8C 0D DD             STY  $DD0D               ; TURN OFF CIAS TIMER INTERRUPTS
+00225  0A05  AD 0D DC             LDA  $DC0D               ; CANCEL ALL CIA-IRQS IN QUEUE/UNPROCESSED
+00226  0A08  AD 0D DD             LDA  $DD0D               ; CANCEL ALL CIA-IRQS IN QUEUE/UNPROCESSED
+00227  0A0B  A9 93                LDA  #$93                ; CLEAR SCREEN CHARACTER
+00228  0A0D  20 D2 FF             JSR  KERNAL_CHROUT
+00229  0A10  A9 1C                LDA  #$1C                ; CHANGE TO RED TEXT
+00230  0A12  8D FC 09             STA  ERROR
+00231  0A15  A9 1B                LDA  #ERRORLAST - ERRORTEXT; OUTPUT ERROR MESSAGE
+00232  0A17  8D 52 0A             STA  TXTLENGTH
+00233  0A1A  A9 56                LDA  #<ERRORTEXT
+00234  0A1C  85 FB                STA  PTRL
+00235  0A1E  A9 0A                LDA  #>ERRORTEXT
+00236  0A20  85 FC                STA  PTRH
+00237  0A22  20 A8 09             JSR  CONSOLEOUT
+00238  0A25  A9 02                LDA  #02
+00239  0A27  8D 54 0A             STA  BDRCOL
+00240  0A2A             COUNTANIM
+00241  0A2A  A0 05                LDY  #5
+00242  0A2C  A2 00                LDX  #0
+00243  0A2E             @LOOP
+00244  0A2E  BD 1B 0B             LDA  COUNT,X
+00245  0A31  48                   PHA
+00246  0A32  29 0F                AND  #$0F
+00247  0A34  20 45 0A             JSR  PLOTBCD
+00248  0A37  68                   PLA
+00249  0A38  4A                   LSR  A
+00250  0A39  4A                   LSR  A
+00251  0A3A  4A                   LSR  A
+00252  0A3B  4A                   LSR  A
+00253  0A3C  20 45 0A             JSR  PLOTBCD
+00254  0A3F  E8                   INX
+00255  0A40  E0 03                CPX  #3
+00256  0A42  D0 EA                BNE  @LOOP
+00257  0A44  60                   RTS
+00258  0A45             PLOTBCD
+00259  0A45  18                   CLC
+00260  0A46  69 30                ADC  #48
+00261  0A48  99 B9 07             STA  CLKPOS,Y
+00262  0A4B  88                   DEY
+00263  0A4C  60                   RTS
+00264  0A4D             
+00265  0A4D             
+00266  0A4D  4C 4D 0A             JMP*
+00267  0A50             ;-------------------------------------------------------------------------DATA
+00268  0A50  00         MUSICREADYBYTE 0
+00269  0A51  00         PADS      BYTE 0
+00270  0A52  00         TXTLENGTH BYTE 0
+00271  0A53  00         OLDCOUNT  BYTE 0
+00272  0A54  00         BDRCOL    BYTE 0
+00273  0A55  00         LOADMUSIC BYTE 0
+00274  0A56                       
+00275  0A56  3E 45 D2   ERRORTEXT TEXT ">ERROR - 404 FILE NOT FOUND"
+00276  0A71             ERRORLAST
+00277  0A71  3E CC CF   COPYTEXT  TEXT ">LOADER V 1.0 (C)DANNYARNOLD.COM 2019"
+00278  0A96             COPYLAST
+00279  0A96             
+00280  0A96             
+00281  0A96  C3 CF CC   CNAME     TEXT "COL1"
+00282  0A9A             CNAMELAST
+00283  0A9A  D3 C3 CE   FNAME     TEXT "SCN1"
+00284  0A9E             FNAMELAST
+00285  0A9E  D3 C9 C4   SID       TEXT"SID"
+00286  0AA1             SIDLAST
+00287  0AA1  3E 20 20   STATUS    TEXT ">       DR WHO AND THE TARDIS       MUSIC BY ALISSE GLASS        PRESS M FOR MUTE       ...........................       "
+00288  0B1B             STATEND
+00289  0B1B  00 00 00   COUNT     BYTE0, 0, 0
+00290  0B1E             
+
+******* 30 Label(s) *******
+.noload = $0914 
+bdrcol = $0A54 
+cname = $0A96 
+cnamelast = $0A9A 
+consoleout = $09A8 
+copylast = $0A96 
+copytext = $0A71 
+count = $0B1B 
+countanim = $0A2A 
+error = $09FC 
+errorlast = $0A71 
+errortext = $0A56 
+fname = $0A9A 
+fnamelast = $0A9E 
+irq = $0946 
+loadcode = $09E3 
+loadmusic = $0A55 
+main_loop = $0926 
+musicready = $0A50 
+oldcount = $0A53 
+padcenter = $09B9 
+pads = $0A51 
+plotbcd = $0A45 
+sid = $0A9E 
+sidlast = $0AA1 
+statend = $0B1B 
+status = $0AA1 
+statusout = $098F 
+textout = $09D5 
+txtlength = $0A52 
+
+******* 10 Unused label(s) *******
+.noload
+@cont
+@loop
+@loop
+@lp
+@skip
+@skip
+@skipplay
+@start
+@start
+cnamelast
+copylast
+errorlast
+fnamelast
+loadcode
+loadmusic
+padcenter
+sidlast
+statend
+
+******* 18 Variable(s) *******
+address_music  = $1000
+BACKCOL  = $D021
+BORDCOL  = $D020
+CHRSET  = $D018
+CLKPOS  = $07B9
+FRAMETRIGGER  = $0032
+INTCLOCK  = $0002
+KERNAL_CHROUT  = $FFD2
+payload  = $2700
+PTRH  = $00FC
+PTRL  = $00FB
+SCREENCOLS  = $0028
+SCREENLINES  = $0018
+sid_init  = $1000
+sid_play  = $1003
+STATUSLINE  = $0010
+TEXTCOL  = $0286
+tgt_c64  = $0001
+******* -4 Unused variables(s) *******
+address_music
+CLKPOS
+payload
+SCREENCOLS
+tgt_c64
+
